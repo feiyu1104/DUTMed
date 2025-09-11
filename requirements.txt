@@ -1,0 +1,24 @@
+python-dotenv~=1.1.1
+py2neo
+openai>=1.0
+numpy>=1.21
+scikit-learn>=1.0
+pandas>=1.1
+requests>=2.31
+flask>=2.3
+rich>=13
+ansi2html
+pyyaml>=5.3
+pillow>=7.1
+torch>=1.7.0
+torchvision>=0.8.1
+matplotlib>=3.2
+seaborn>=0.11
+tqdm>=4.64
+opencv-python>=4.6
+scipy>=1.4
+ultralytics>=8.0.120
+soundfile>=0.12
+websocket-client>=1.6
+gevent>=22.10
+# pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu118 -i https://pypi.tuna.tsinghua.edu.cn/simple

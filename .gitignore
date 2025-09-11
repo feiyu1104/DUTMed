@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs and databases
+*.log
+*.sqlite3
+*.db
+
+# Environment variables (IMPORTANT!)
+.env
+.env.local
+.env.development
+.env.production
+
+# OS generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temp files
+*.tmp
+*.bak
+*.temp
+temp/
+tmp/
+
+# Image uploads (if you don't want to track user uploads)
+static/uploads/
+static/segmented/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb
+
+# MyPy, Coverage, etc.
+.mypy_cache/
+.coverage
+htmlcov/
+.pytest_cache/
+
+# OS-specific
+desktop.ini
+
+weights/FastSAM_X.pt

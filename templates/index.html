@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DUTMed</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="main-container">
+    <header class="app-header">
+        <div class="logo-title">
+            <img src="{{ url_for('static', filename='css/icon.png') }}" alt="DLUTMed Logo" class="logo-icon" width="45" height="45">
+            <h1>DUTMed</h1>
+        </div>
+        <p class="intro">我是DUTMed，一个基于Multi-Agent的多模态医学助手。我可以连接您的Neo4j图数据库，理解您的问题，并在图谱中探索答案。请把您的任务交给我吧~</p>
+         <div class="user-info">
+            <span>Neo4j: {{ neo4j_config.uri }} (用户: {{ neo4j_config.user }})</span>
+        </div>
+    </header>
+    
+    <div class="content-layout">
+        <div id="logs-panel" class="logs-panel">
+            <div class="logs-header">
+                <span>思考过程</span>
+                <button id="toggle-logs-btn">折叠</button>
+            </div>
+            <div id="logs-content" class="logs-content"></div>
+        </div>
+        
+        <div id="chat-panel" class="chat-panel">
+            <div id="chat-history" class="chat-history">
+                 <!-- Chat messages will be appended here -->
+            </div>
+        </div>
+    </div>
+
+    <div class="input-area">
+        <div class="input-controls">
+            <button id="deep-search-btn" class="control-btn" data-enabled="true" title="多跳查询已 开启">
+                <span class="icon">🧠</span> 深度搜索 (多跳)
+            </button>
+            <div class="budget-control">
+                <label for="search-budget">搜索预算:</label>
+                <select id="search-budget" class="control-select">
+                    <option value="Deeper" selected>Deeper</option>
+                    <option value="Deep">Deep</option>
+                </select>
+            </div>
+            <div class="extra-modules">
+                <label class="file-upload-label" title="上传文件">
+                    <input type="file" class="file-upload-input" style="display:none;">
+                    <span style="font-size:1.3em">📎</span> 上传图片
+                </label>
+            </div>
+        </div>
+        <div class="input-bar">
+            <textarea id="question-input" placeholder="给 DUTMed 发送消息"></textarea>
+            <button id="send-btn" class="send-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" /></svg>
+            </button>
+        </div>
+    </div>
+</div>
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>

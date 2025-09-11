@@ -1,0 +1,920 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    background-color: #e6f2fb; /* 更柔和的浅蓝色背景 */
+    color: #222;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    font-size: 16px;
+    background-image: url('background.png');
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center;
+    /* 通过伪元素实现半透明遮罩 */
+    position: relative;
+}
+body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(30, 120, 200, 0.08); /* 更蓝的半透明遮罩 */
+    pointer-events: none;
+    z-index: 0;
+}
+
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    flex-grow: 1;
+    padding: 20px;
+}
+
+.login-box {
+    background-color: #2176c7; /* 更亮的蓝色背景 */
+    padding: 28px 24px; /* 缩小内边距 */
+    border-radius: 14px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+    width: 100%;
+    max-width: 340px; /* 缩小最大宽度 */
+    text-align: center;
+    margin: 0 auto;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+.logo-icon {
+    margin-right: 10px;
+    border-radius: 50%;
+    object-fit: cover;
+    transform: translateY(6px);
+    width: 38px !important;
+    height: 38px !important;
+}
+
+.login-box .title {
+    font-size: 2em;
+    font-weight: 600;
+    color: #f0f6fa;
+    margin-bottom: 8px;
+}
+.login-box h2 {
+    font-size: 1.1em;
+    color: #d0e7fa;
+    margin-bottom: 18px;
+    font-weight: 400;
+}
+
+.form-group {
+    margin-bottom: 16px;
+    text-align: left;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    color: #e3f0fc;
+    font-size: 0.92em;
+}
+.form-group input {
+    width: calc(100% - 16px);
+    padding: 10px 8px;
+    border-radius: 6px;
+    border: 1px solid #b3d3f2;
+    background-color: #f6fbff;
+    color: #222;
+    font-size: 1em;
+    transition: border-color 0.2s;
+}
+.form-group input:focus {
+    outline: none;
+    border-color: #2176c7;
+    box-shadow: 0 0 0 2px rgba(33, 118, 199, 0.13);
+}
+
+.btn-primary {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    background-color: #2176c7; /* 主色调蓝色 */
+    color: white;
+    font-size: 1.05em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    box-shadow: 0 2px 8px rgba(33, 118, 199, 0.08);
+}
+.btn-primary:hover {
+    background-color: #1765a6;
+}
+.error {
+    color: #ff8080;
+    margin-bottom: 16px;
+    padding: 8px;
+    background-color: rgba(255,0,0,0.08);
+    border-left: 3px solid #ff4d4d;
+    border-radius: 4px;
+    text-align: left;
+}
+
+
+/* Main App Styling */
+.main-container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 30px);
+    background-color: rgba(255,255,255,0.7);
+    border-radius: 10px;
+    box-shadow: 0 0 18px rgba(33, 118, 199, 0.10);
+    transition: all 0.5s ease;
+}
+
+.main-container.chat-active {
+    height: calc(100vh - 20px); /* 当聊天激活时增加高度 */
+}
+
+.app-header {
+    text-align: center;
+    padding-bottom: 10px; /* 减少底部内边距 */
+    border-bottom: 1px solid #4b4c56;
+    margin-bottom: 5px; /* 减少与下方的间距 */
+    transition: all 0.5s ease;
+}
+
+.app-header.chat-active {
+    padding-bottom: 5px;
+    margin-bottom: 5px;
+}
+
+.app-header.chat-active .logo-title {
+    display: none;
+}
+
+.app-header.chat-active .intro {
+    display: none;
+}
+
+.app-header.chat-active .user-info {
+    text-align: center;
+    margin: 0;
+    padding: 8px 0;
+}
+.app-header .logo-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0px;
+}
+.app-header .logo-icon {
+    width: 55px !important; /* 统一主页图标尺寸 */
+    height: 55px !important;
+    border-radius: 50%; /* 圆形图标效果 */
+    object-fit: cover; /* 保持图片比例 */
+    margin-right: 15px; /* 与文字的间距 */
+    /* 调整图标位置 - 可以修改这些值来移动图标 */
+    transform: translateY(18px); /* 向上移动2px，与标题文字基线对齐 */
+}
+.app-header h1 {
+    font-size: 2.2em;
+    color: #2176c7;
+    margin-left: 0px;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+.app-header .intro {
+    font-size: 0.98em;
+    color: #2176c7;
+    margin-bottom: 8px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 0px;
+    line-height: 1.4;
+}
+.user-info {
+    font-size: 0.82em; /* 稍微减小字体 */
+    color: #8e8ea0;
+    margin-top: 5px; /* 减少上方间距 */
+}
+.logout-btn {
+    color: #6366F1;
+    text-decoration: none;
+    margin-left: 15px;
+}
+.logout-btn:hover {
+    text-decoration: underline;
+}
+
+
+/* New Content Layout */
+.content-layout {
+    flex-grow: 1; /* Takes available vertical space */
+    display: flex;
+    gap: 15px; /* Space between logs and chat */
+    overflow: hidden; /* Prevent layout container from scrolling */
+    margin-bottom: 15px; /* Space before input area */
+    margin-top: 8px; /* 减少与头部的间距 */
+    min-height: 0; /* 确保flex子元素可以收缩 */
+}
+
+/* Left Panel: Logs */
+.logs-panel {
+    width: 40%; 
+    min-width: 250px; 
+    display: none; /* Initially hidden */
+    flex-direction: column;
+    background-color: #2a2b32;
+    border-radius: 8px;
+    border: 1px solid #40414f;
+    overflow: hidden; 
+    transition: width 0.3s ease, min-width 0.3s ease, opacity 0.3s ease, display 0s ease 0.3s; /* Delay display none */
+    opacity: 0; /* Start fully transparent */
+}
+
+.logs-panel.visible {
+    display: flex; /* Make it visible */
+    opacity: 1; /* Fade in */
+    transition: width 0.3s ease, min-width 0.3s ease, opacity 0.3s ease;
+}
+
+.logs-panel.collapsed {
+    width: 50px; /* Increased width */
+    min-width: 50px; /* Increased width */
+    opacity: 0.9; /* Slightly more opaque */
+    /* Remove background color change on header when collapsed */
+}
+
+.logs-panel.collapsed .logs-header {
+    padding: 0; /* Remove padding */
+    border-bottom: none; /* Remove bottom border when collapsed */
+    height: 100%; /* Make header take full height */
+    display: flex; /* Ensure flex properties apply */
+    justify-content: center; /* Center the button horizontally */
+    align-items: center; /* Center the button vertically */
+    background-color: #30313a; /* Keep header background */
+    cursor: pointer; /* Make the whole header clickable to re-open */
+}
+
+.logs-panel.collapsed .logs-header span {
+    display: none; /* Keep title hidden */
+}
+
+.logs-panel.collapsed #toggle-logs-btn {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    padding: 10px 5px; /* Adjust padding */
+    border: none; /* Remove border */
+    background-color: #40414f; /* Add background to make it distinct */
+    color: #b0b3b8;
+    height: auto; /* Let padding define height */
+    width: auto; /* Let padding define width */
+    font-size: 0.8em; /* Slightly smaller text */
+    line-height: 1.2;
+    border-radius: 4px; /* Optional: some rounding */
+    text-align: center; /* Center text within button */
+    /* Ensure it doesn't try to take 100% width which might conflict */
+}
+
+.logs-panel.collapsed #toggle-logs-btn:hover {
+    background-color: #52535f; /* Hover effect */
+}
+
+.logs-panel.collapsed .logs-content {
+    display: none; /* Keep content hidden */
+}
+
+.logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: #30313a;
+    cursor: pointer;
+    flex-shrink: 0; /* Prevent header from shrinking */
+    border-bottom: 1px solid #40414f; /* Separator */
+}
+.logs-header span {
+    font-weight: 500;
+    color: #b0b3b8;
+    white-space: nowrap;
+}
+#toggle-logs-btn {
+    background: none;
+    border: 1px solid #52535f;
+    color: #b0b3b8;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+#toggle-logs-btn:hover {
+    background-color: #40414f;
+}
+
+.logs-content {
+    flex-grow: 1; /* Takes available space in the panel */
+    overflow-y: auto; /* Enable scrolling for logs */
+    padding: 10px 15px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    font-size: 0.8em;
+    line-height: 1.5;
+    color: #b0b3b8;
+}
+.log-item { /* Style individual log lines */
+    margin-bottom: 3px;
+    white-space: pre-wrap;
+    word-break: break-all; /* Break long strings if needed */
+}
+
+
+/* Rich HTML export styling fixes */
+.logs-content div[style*="background-color:#ffffff"] {
+    background-color: transparent !important; /* Override rich's default white bg */
+}
+.logs-content pre.code { /* Style for code blocks from rich export */
+    background-color: #202123 !important; /* Darker background for code */
+    padding: 0.5em;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+.logs-content span[style*="color:#000000"] {
+    color: #d1d5db !important; /* Override rich's default black text */
+}
+.logs-content table {
+    border-collapse: collapse;
+    width: auto !important; /* Override rich's default full width */
+    margin-bottom: 1em;
+}
+.logs-content th, .logs-content td {
+    border: 1px solid #4b4c56 !important; /* Darker borders */
+    padding: 0.4em 0.6em !important;
+    text-align: left !important;
+}
+.logs-content th {
+    background-color: #30313a !important; /* Header background for tables */
+}
+
+
+/* Removed specific #answer-output styles as it's replaced by #chat-history */
+
+
+.input-area {
+    padding-top: 15px;
+    border-top: 1px solid #4b4c56;
+}
+.input-controls {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 15px;
+}
+.control-btn {
+    background-color: #b0b3b8; /* 关闭时灰色 */
+    color: #fff;
+    border: 1px solid #b0b3b8;
+    padding: 8px 15px;
+    border-radius: 20px; /* Pill shape */
+    cursor: pointer;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+.control-btn.active {
+    background-color: #2176c7; /* 开启时蓝色 */
+    color: #fff;
+    border-color: #2176c7;
+}
+.control-btn:hover {
+    background-color: #a0a3a8; /* 关闭时hover略深灰 */
+}
+.control-btn.active:hover {
+    background-color: #1765a6; /* 开启时hover深蓝 */
+}
+.control-btn .icon {
+    font-size: 1.2em;
+}
+
+.budget-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.budget-control label {
+    font-size: 0.9em;
+    color: #000000;
+}
+.control-select {
+    background-color: #6366F1;
+    color: #ececec;
+    border: 1px solid #52535f;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 0.9em;
+}
+.control-select:focus {
+    outline: none;
+    border-color: #6366F1;
+}
+
+.input-bar {
+    display: flex;
+    align-items: flex-end; /* Align items to bottom if textarea grows */
+    background-color: #e3f0fc; /* Background for input bar */
+    border-radius: 12px; /* Rounded corners like DeepSeek */
+    padding: 8px;
+    border: 1px solid #b3d3f2;
+}
+.input-bar:focus-within {
+    border-color: #6366F1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+#question-input {
+    flex-grow: 1;
+    border: none;
+    background-color: #f6fbff; /* 浅蓝色背景 */
+    color: #222; /* 文字为深色 */
+    padding: 10px;
+    font-size: 1em;
+    resize: none;
+    min-height: 24px;
+    max-height: 150px;
+    overflow-y: auto;
+    line-height: 1.5;
+}
+#question-input:focus {
+    outline: none;
+    background-color: #e3f0fc;
+}
+#question-input::placeholder {
+    color: #8e8ea0;
+}
+
+.send-btn {
+    background-color: #6366F1; /* DeepSeek-like send button color */
+    color: white;
+    border: none;
+    border-radius: 8px; /* Slightly less rounded than input bar */
+    width: 40px;
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    margin-left: 8px;
+    transition: background-color 0.2s ease;
+}
+.send-btn:hover {
+    background-color: #4F46E5;
+}
+.send-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* Chat Message Styling */
+.message {
+    padding: 10px 15px;
+    border-radius: 18px;
+    margin-bottom: 5px; /* Reduced margin */
+    max-width: 80%; /* Max width of message bubble */
+    line-height: 1.5;
+    word-wrap: break-word; /* Wrap long words */
+    position: relative; /* For potential future elements like timestamps */
+}
+.user-message {
+    background-color: #0b57d0; /* A blue similar to user messages in some chats */
+    color: white;
+    align-self: flex-end; /* Align to the right */
+    margin-left: auto;
+    border-bottom-right-radius: 5px; /* Bubble tail effect */
+}
+.assistant-message {
+    background-color: #e3f0fc; /* 浅蓝色背景 */
+    color: #222; /* 文字为深色 */
+    align-self: flex-start;
+    margin-right: auto;
+    border-bottom-left-radius: 5px;
+}
+.message.error { /* Style for error messages */
+    background-color: rgba(255, 77, 77, 0.2);
+    color: #ffcccc;
+    border: 1px solid rgba(255, 77, 77, 0.5);
+    align-self: flex-start;
+     max-width: 100%; /* Errors can be full width */
+}
+
+/* Code snippets within messages */
+.message code {
+    background-color: rgba(0, 0, 0, 0.2);
+    padding: 0.2em 0.4em;
+    border-radius: 4px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    font-size: 0.9em;
+}
+.message strong {
+    font-weight: 600; /* Adjust boldness if needed */
+}
+.message em {
+    font-style: italic;
+}
+
+
+/* Scrollbar styling for webkit browsers */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #2a2b32;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: #52535f;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #6a6b77;
+}
+
+/* Spinner for send button */
+.spinner {
+    display: inline-block;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-left-color: #fff;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Right Panel: Chat */
+.chat-panel {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: #e3f0fc;
+    border-radius: 8px;
+    overflow: hidden;
+    width: 100%; /* Default to full width if logs aren't shown */
+}
+
+#chat-history {
+    flex-grow: 1; /* History takes up available space */
+    overflow-y: auto;
+    padding: 15px; /* Padding for messages */
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* Increased gap between messages */
+}
+
+/* Ensure chat panel takes up space even if logs panel is not yet visible */
+.content-layout.logs-active .logs-panel {
+    display: flex; /* This class will be added by JS */
+    opacity: 1;
+}
+
+.content-layout.logs-active .chat-panel {
+    width: 60%; /* Adjust if logs panel is 40% */
+}
+
+.main-container.chat-active .content-layout {
+    flex-grow: 1; /* 当聊天激活时，内容区域占据更多空间 */
+}
+
+.message.thinking {
+    color: #8e8ea0; /* Dim color for thinking message */
+    font-style: italic;
+}
+
+.thinking-dots span {
+    animation: blink 1.4s infinite both;
+    font-weight: bold;
+}
+.thinking-dots span:nth-child(2) {
+    animation-delay: .2s;
+}
+.thinking-dots span:nth-child(3) {
+    animation-delay: .4s;
+}
+
+@keyframes blink {
+    0%, 80%, 100% { opacity: 0; }
+    40% { opacity: 1; }
+}
+
+.message.error-message { /* More specific than just .error if needed */
+    background-color: rgba(205, 49, 49, 0.1);
+    color: #ff8f8f;
+    border: 1px solid rgba(205, 49, 49, 0.4);
+    align-self: flex-start; /* Keep errors on the left */
+    max-width: 100%;
+}
+
+.extra-modules {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: 18px;
+}
+
+.voice-input-label, .file-upload-label {
+    display: inline-block;
+    cursor: pointer;
+}
+
+.voice-input-btn, .file-upload-label {
+    background: #d0e7fa;
+    border: 1px solid #b3d3f2;
+    border-radius: 6px;
+    padding: 6px 14px;
+    color: #1976d2;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+}
+
+.voice-input-btn:hover, .file-upload-label:hover {
+    background: #b3d3f2;
+}
+
+.voice-input, .file-upload-input {
+    display: none;
+}
+
+/* User uploaded image styles (right side, blue) */
+.user-image-upload {
+    margin: 10px 0;
+    padding: 15px;
+    border-radius: 8px;
+    background-color: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.user-image-upload p {
+    margin: 0 0 10px 0;
+    color: #f0f0f0;
+    font-weight: 600;
+}
+
+.uploaded-image {
+    max-width: 100%;
+    max-height: 300px;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+    cursor: pointer;
+}
+
+.uploaded-image:hover {
+    transform: scale(1.02);
+}
+
+/* System segmentation result styles (left side, assistant) */
+.segmentation-result {
+    margin: 10px 0;
+    padding: 15px;
+    border-radius: 8px;
+    background-color: rgba(245, 245, 245, 0.8);
+    border: 1px solid #e0e0e0;
+}
+
+.segmentation-result p {
+    margin: 0 0 10px 0;
+    color: #333;
+    font-weight: 600;
+}
+
+.segmented-image-container {
+    margin: 15px 0;
+    text-align: center;
+}
+
+.segmented-image {
+    max-width: 100%;
+    max-height: 400px;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+    cursor: pointer;
+}
+
+.segmented-image:hover {
+    transform: scale(1.02);
+}
+
+/* Medical description styles */
+.medical-description {
+    margin: 15px 0;
+    padding: 20px;
+    border-radius: 8px;
+    background-color: rgba(240, 248, 255, 0.9);
+    border: 1px solid rgba(70, 130, 180, 0.3);
+    border-left: 4px solid #4682B4;
+}
+
+.medical-description p {
+    margin: 0 0 15px 0;
+    color: #2F4F4F;
+    font-weight: 600;
+    font-size: 1.1em;
+}
+
+.description-content {
+    color: #333;
+    line-height: 1.6;
+    font-size: 0.95em;
+    text-align: left;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 15px;
+    border-radius: 6px;
+    border: 1px solid rgba(70, 130, 180, 0.2);
+}
+
+.description-content strong {
+    color: #2F4F4F;
+    font-weight: 600;
+}
+
+.description-content br {
+    margin-bottom: 8px;
+}
+
+.segmentation-info {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.7);
+    border-radius: 6px;
+    border-left: 4px solid #6366F1;
+}
+
+.segmentation-info p {
+    margin: 0 0 8px 0;
+    color: #333;
+    font-weight: 600;
+}
+
+.segmentation-info ul {
+    margin: 0;
+    padding-left: 20px;
+    color: #555;
+}
+
+.segmentation-info li {
+    margin: 4px 0;
+    font-size: 0.9em;
+}
+
+/* Responsive design for images */
+@media (max-width: 768px) {
+    .uploaded-image, .segmented-image {
+        max-height: 250px;
+    }
+    
+    .user-image-upload, .segmentation-result, .medical-description {
+        padding: 10px;
+    }
+    
+    .description-content {
+        padding: 10px;
+        font-size: 0.9em;
+    }
+    
+    .medical-description p {
+        font-size: 1em;
+    }
+}
+
+/* 主内容区和按钮等蓝色统一调整 */
+.main-container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 30px);
+    background-color: rgba(255,255,255,0.7);
+    border-radius: 10px;
+    box-shadow: 0 0 18px rgba(33, 118, 199, 0.10);
+    transition: all 0.5s ease;
+}
+
+.app-header h1 {
+    font-size: 2.2em;
+    color: #2176c7;
+    margin-left: 0px;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+.app-header .intro {
+    font-size: 0.98em;
+    color: #2176c7;
+    margin-bottom: 8px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 0px;
+    line-height: 1.4;
+}
+
+/* 按钮主色调统一 */
+.btn-primary, .control-btn, .send-btn {
+    background-color: #2176c7;
+    color: #fff;
+    border: none;
+}
+.btn-primary:hover, .control-btn:hover, .send-btn:hover {
+    background-color: #1765a6;
+}
+.control-btn.active {
+    background-color: #1765a6;
+    color: #fff;
+    border-color: #1765a6;
+}
+
+/* 输入栏背景色更柔和 */
+.input-bar {
+    background-color: #e3f0fc;
+    border: 1px solid #b3d3f2;
+}
+#question-input {
+    background-color: #f6fbff;
+}
+
+/* 其他细节色彩微调... */
+
+@media (max-width: 600px) {
+    .login-box {
+        max-width: 96vw;
+        padding: 12px 4vw;
+    }
+    .main-container {
+        max-width: 100vw;
+        padding: 4px 2vw;
+    }
+}
+
+.mic-record-btn {
+    background: #d0e7fa;
+    border: 1px solid #b3d3f2;
+    border-radius: 6px;
+    padding: 6px 14px;
+    color: #1976d2;
+    font-size: 1em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s;
+}
+.mic-record-btn.recording {
+    background: #ffb3b3;
+    color: #b30000;
+    border-color: #ffb3b3;
+}
+.mic-icon {
+    font-size: 1.3em;
+}
+/* 深度搜索按钮激活状态 */
+#deep-search-btn.active {
+    background-color: #4CAF50; /* 绿色背景 */
+    color: white;
+    border-color: #45a049;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+#deep-search-btn.active .icon {
+    animation: pulse 1.5s infinite; /* 可选：加个脉冲动画 */
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
