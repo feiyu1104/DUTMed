@@ -5,8 +5,9 @@
 ---
 
 - [@feiyu1104 (xuefeiyu)](https://github.com/feiyu1104)
-- [Juvenilecris (ningning wang)](https://github.com/Juvenilecris)
+- [@Juvenilecris (ningning wang)](https://github.com/Juvenilecris)
 
 ---
+
 
 > 💡 我们会持续更新此名单。如果你的贡献未被列出，请提交 PR 或联系维护者 😊
