@@ -121,19 +121,19 @@ python q_a.py --disable_multi_hop
 
 - ### 文本问答
 
-![image-20250911231446133](sources\1.png)
+![1](sources\1.png)
 
 - ### 图像分析
 
-![image-20250912100117065](sources\2.png)
+![2](sources\2.png)
 
-![image-20250912100211320](sources\3.png)
+![3](sources\3.png)
 
 ### 2. 终端命令行模式
 
-![image-20250911232325864](sources\4.png)
+![4](sources\4.png)
 
-![image-20250911232411335](sources\5.png)
+![5](sources\5.png)
 
 ## 🛠️ 技术架构
 
@@ -283,5 +283,6 @@ Neo4jRAGSystem (q_a.py)
 - 感谢所有**贡献者**！完整名单请见 [CONTRIBUTORS.md](CONTRIBUTORS.md)
 
   我们也欢迎你加入贡献者行列 🎉
+
 
 > **免责声明**：本系统生成的医学信息仅供参考，不能替代专业医疗建议、诊断或治疗！请在医生指导下进行决策！
