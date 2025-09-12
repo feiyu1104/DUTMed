@@ -121,19 +121,18 @@ python q_a.py --disable_multi_hop
 
 - ### 文本问答
 
-[![1](sources\1.png)](https://github.com/feiyu1104/DUTMed/blob/5658efb32f7bebce1518901bdecfef2d3cf52393/sources/1.png)
+![1](https://github.com/feiyu1104/DUTMed/blob/5658efb32f7bebce1518901bdecfef2d3cf52393/sources/1.png)
 
 - ### 图像分析
 
-[![2](sources\2.png)
-](https://github.com/feiyu1104/DUTMed/blob/5658efb32f7bebce1518901bdecfef2d3cf52393/sources/2.png)
-[![3](sources\3.png)](https://github.com/feiyu1104/DUTMed/blob/5658efb32f7bebce1518901bdecfef2d3cf52393/sources/3.png)
+![2](https://github.com/feiyu1104/DUTMed/blob/5658efb32f7bebce1518901bdecfef2d3cf52393/sources/2.png)
+![3](https://github.com/feiyu1104/DUTMed/blob/5658efb32f7bebce1518901bdecfef2d3cf52393/sources/3.png)
 
 ### 2. 终端命令行模式
 
-[![4](sources\4.png)](https://github.com/feiyu1104/DUTMed/blob/5658efb32f7bebce1518901bdecfef2d3cf52393/sources/4.png)
+![4](https://github.com/feiyu1104/DUTMed/blob/5658efb32f7bebce1518901bdecfef2d3cf52393/sources/4.png)
 
-[![5](sources\5.png)](https://github.com/feiyu1104/DUTMed/blob/5658efb32f7bebce1518901bdecfef2d3cf52393/sources/5.png)
+![5](https://github.com/feiyu1104/DUTMed/blob/5658efb32f7bebce1518901bdecfef2d3cf52393/sources/5.png)
 
 ## 🛠️ 技术架构
 
@@ -286,3 +285,4 @@ Neo4jRAGSystem (q_a.py)
 
 
 > **免责声明**：本系统生成的医学信息仅供参考，不能替代专业医疗建议、诊断或治疗！请在医生指导下进行决策！
+
