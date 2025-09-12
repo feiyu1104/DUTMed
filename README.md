@@ -264,7 +264,7 @@ Neo4jRAGSystem (q_a.py)
 
 如有问题或建议，请：
 
-- 提交 [Issue]([议题 · feiyu1104/DUTMed](https://github.com/feiyu1104/DUTMed/issues)s)
+- 提交 [Issue](https://github.com/feiyu1104/DUTMed/issues)
 - 或联系我们：[feiyucom@outlook.com](mailto:feiyucom@outlook.com)
 
 ## 🙏 致谢
@@ -285,5 +285,6 @@ Neo4jRAGSystem (q_a.py)
 
 
 > **免责声明**：本系统生成的医学信息仅供参考，不能替代专业医疗建议、诊断或治疗！请在医生指导下进行决策！
+
 
 
