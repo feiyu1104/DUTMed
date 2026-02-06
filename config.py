@@ -47,6 +47,10 @@ class Config:
     API_BASE_DELAY = 1.0
     API_TIMEOUT = 60
     
+    # LLM缓存配置 - 只对确定性查询（低温度）启用缓存
+    # 温度低于此阈值的查询会被缓存，因为结果更确定
+    LLM_CACHE_TEMPERATURE_THRESHOLD = 0.5
+    
     # 速率限制配置
     RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "True").lower() == "true"
     RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
@@ -116,6 +120,6 @@ try:
     Config.validate()
 except EnvironmentError as e:
     # 只在非测试环境中抛出错误
-    if os.getenv("TESTING") != "true":
+    if os.getenv("TESTING", "").lower() not in ("true", "1", "yes"):
         print(f"警告: {e}")
         print("请创建 .env 文件并设置必需的环境变量")

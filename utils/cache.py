@@ -41,10 +41,12 @@ class LRUCache:
         Returns:
             缓存的值，如果不存在或已过期则返回None
         """
-        if key not in self.cache or self._is_expired(key):
-            if key in self.cache:
-                del self.cache[key]
-                del self.timestamps[key]
+        if key not in self.cache:
+            return None
+            
+        if self._is_expired(key):
+            del self.cache[key]
+            del self.timestamps[key]
             return None
         
         # 移动到末尾（最近使用）
@@ -147,7 +149,11 @@ def cached(cache, key_func=None):
             
             # 尝试从缓存获取
             cached_value = cache.get(cache_key)
-            if cached_value is not None:
+            # 使用 key in cache 检查而不是 is not None，以支持缓存 falsy 值
+            if cache_key in cache.cache and cached_value is None:
+                # key存在但值为None，这是一个有效的缓存值
+                return cached_value
+            elif cached_value is not None:
                 return cached_value
             
             # 调用原函数

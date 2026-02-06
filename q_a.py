@@ -343,7 +343,7 @@ class Neo4jRAGSystem:
     def call_llm(self, prompt: str, temperature: float = 0.7) -> str:
         """调用阿里云通义千问API，带重试机制和缓存"""
         # 检查缓存（只对低温度的确定性查询启用缓存）
-        if llm_cache and Config.CACHE_ENABLED and temperature < 0.5:
+        if llm_cache and Config.CACHE_ENABLED and temperature < Config.LLM_CACHE_TEMPERATURE_THRESHOLD:
             cache_key = generate_cache_key("llm", prompt, temperature)
             cached_result = llm_cache.get(cache_key)
             if cached_result is not None:
@@ -382,7 +382,7 @@ class Neo4jRAGSystem:
                 if 'choices' in res_obj and len(res_obj['choices']) > 0:
                     content = res_obj['choices'][0]['message']['content']
                     # 存入缓存
-                    if llm_cache and Config.CACHE_ENABLED and temperature < 0.5:
+                    if llm_cache and Config.CACHE_ENABLED and temperature < Config.LLM_CACHE_TEMPERATURE_THRESHOLD:
                         cache_key = generate_cache_key("llm", prompt, temperature)
                         llm_cache.set(cache_key, content)
                     return content
