@@ -12,18 +12,19 @@ from fastsam import FastSAM, FastSAMPrompt
 import tempfile
 import uuid
 from pathlib import Path
+from config import Config
 
 
 class ImageSegmentationService:
     """图像分割服务类"""
 
-    def __init__(self, model_path="./weights/FastSAM_X.pt"):
+    def __init__(self, model_path=None):
         """
         初始化图像分割服务
         Args:
             model_path: FastSAM模型权重文件路径
         """
-        self.model_path = model_path
+        self.model_path = model_path or Config.FASTSAM_MODEL_PATH
         self.model = None
         self.device = torch.device(
             "cuda" if torch.cuda.is_available()
@@ -33,8 +34,8 @@ class ImageSegmentationService:
 
         # 创建必要的目录
         os.makedirs("./weights", exist_ok=True)
-        os.makedirs("./static/uploads", exist_ok=True)
-        os.makedirs("./static/segmented", exist_ok=True)
+        os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+        os.makedirs(Config.SEGMENTED_FOLDER, exist_ok=True)
 
         self._load_model()
 
@@ -142,7 +143,7 @@ class ImageSegmentationService:
             # 保存分割结果
             timestamp = str(uuid.uuid4())
             segmented_filename = f"segmented_{timestamp}.png"
-            segmented_path = os.path.join("./static/segmented", segmented_filename)
+            segmented_path = os.path.join(Config.SEGMENTED_FOLDER, segmented_filename)
 
             # 将numpy数组转换为PIL图像并保存
             if isinstance(segmented_image_array, np.ndarray):
@@ -186,7 +187,7 @@ class ImageSegmentationService:
             # 生成唯一文件名
             timestamp = str(uuid.uuid4())
             filename = f"upload_{timestamp}.png"
-            filepath = os.path.join("./static/uploads", filename)
+            filepath = os.path.join(Config.UPLOAD_FOLDER, filename)
 
             # 保存文件
             image_file.save(filepath)
