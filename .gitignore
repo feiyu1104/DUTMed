@@ -26,6 +26,7 @@ Thumbs.db
 *.log
 *.sqlite3
 *.db
+logs/
 
 # Environment variables (IMPORTANT!)
 .env

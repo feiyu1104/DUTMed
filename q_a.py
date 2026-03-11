@@ -16,20 +16,22 @@ from rich.markdown import Markdown
 from collections import defaultdict
 import argparse
 
+# 导入配置和缓存模块
+from config import Config
+from utils.cache import get_embedding_cache, get_llm_cache, generate_cache_key
+
 # 阿里云通义千问API配置
 load_dotenv()
-ALI_API_KEY = os.getenv("ALI_API_KEY")
-ALI_BASE_URL = os.getenv("ALI_BASE_URL")
-ALI_MODEL = os.getenv("ALI_MODEL0")
-
-# 校验必填项
-if not ALI_API_KEY:
-    raise EnvironmentError("请在 .env 中设置 ALI_API_KEY")
-if not ALI_BASE_URL:
-    raise EnvironmentError("请在 .env 中设置 ALI_BASE_URL")
+ALI_API_KEY = Config.ALI_API_KEY
+ALI_BASE_URL = Config.ALI_BASE_URL
+ALI_MODEL = Config.ALI_MODEL0
 
 # 初始化rich控制台
 console = Console()
+
+# 初始化缓存
+embedding_cache = get_embedding_cache(max_size=Config.CACHE_MAX_SIZE, ttl=Config.CACHE_TTL) if Config.CACHE_ENABLED else None
+llm_cache = get_llm_cache(max_size=Config.CACHE_MAX_SIZE // 2, ttl=Config.CACHE_TTL // 2) if Config.CACHE_ENABLED else None
 
 
 class Neo4jRAGSystem:
@@ -288,9 +290,16 @@ class Neo4jRAGSystem:
                 return {"entities": [], "relations": []}
 
     def get_embedding(self, text: str) -> List[float]:
-        """获取文本的向量表示（阿里云通义千问API embedding）"""
-        max_retries = 3
-        base_delay = 1.0
+        """获取文本的向量表示（阿里云通义千问API embedding）- 带缓存"""
+        # 检查缓存
+        if embedding_cache and Config.CACHE_ENABLED:
+            cache_key = generate_cache_key("embedding", text)
+            cached_result = embedding_cache.get(cache_key)
+            if cached_result is not None:
+                return cached_result
+        
+        max_retries = Config.API_MAX_RETRIES
+        base_delay = Config.API_BASE_DELAY
         headers = {
             'Authorization': f'Bearer {ALI_API_KEY}',
             'Content-Type': 'application/json'
@@ -305,7 +314,7 @@ class Neo4jRAGSystem:
                     'model': "text-embedding-v4",
                     'input': text
                 }
-                response = requests.post(url, headers=headers, json=data)
+                response = requests.post(url, headers=headers, json=data, timeout=Config.API_TIMEOUT)
                 if response.status_code == 429:
                     if attempt < max_retries - 1:
                         continue
@@ -317,6 +326,9 @@ class Neo4jRAGSystem:
                 result = response.json()
                 if 'data' in result and len(result['data']) > 0 and 'embedding' in result['data'][0]:
                     embedding_vector = result['data'][0]['embedding']
+                    # 存入缓存
+                    if embedding_cache and Config.CACHE_ENABLED:
+                        embedding_cache.set(cache_key, embedding_vector)
                     return embedding_vector
                 else:
                     raise Exception(f"嵌入API返回格式错误: {result}")
@@ -329,9 +341,16 @@ class Neo4jRAGSystem:
         return []
 
     def call_llm(self, prompt: str, temperature: float = 0.7) -> str:
-        """调用阿里云通义千问API，带重试机制"""
-        max_retries = 3
-        base_delay = 1.0  # 基础延迟时间（秒）
+        """调用阿里云通义千问API，带重试机制和缓存"""
+        # 检查缓存（只对低温度的确定性查询启用缓存）
+        if llm_cache and Config.CACHE_ENABLED and temperature < Config.LLM_CACHE_TEMPERATURE_THRESHOLD:
+            cache_key = generate_cache_key("llm", prompt, temperature)
+            cached_result = llm_cache.get(cache_key)
+            if cached_result is not None:
+                return cached_result
+        
+        max_retries = Config.API_MAX_RETRIES
+        base_delay = Config.API_BASE_DELAY
         headers = {
             'Authorization': f'Bearer {ALI_API_KEY}',
             'Content-Type': 'application/json'
@@ -362,6 +381,10 @@ class Neo4jRAGSystem:
                 # OpenAI兼容格式
                 if 'choices' in res_obj and len(res_obj['choices']) > 0:
                     content = res_obj['choices'][0]['message']['content']
+                    # 存入缓存
+                    if llm_cache and Config.CACHE_ENABLED and temperature < Config.LLM_CACHE_TEMPERATURE_THRESHOLD:
+                        cache_key = generate_cache_key("llm", prompt, temperature)
+                        llm_cache.set(cache_key, content)
                     return content
                 else:
                     raise Exception(f"LLM API返回格式错误: {res_obj}")

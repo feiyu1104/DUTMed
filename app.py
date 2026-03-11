@@ -11,6 +11,7 @@ from py2neo import Graph as Py2neoGraph  # Explicit import for clarity
 from image_segmentation import image_segmentation_service  # Import image segmentation service
 from image_description import image_description_service  # Import image description service
 from dotenv import load_dotenv
+from config import Config  # Import centralized config
 
 # Load environment variables from .env file
 load_dotenv()
@@ -18,6 +19,7 @@ load_dotenv()
 # --- Flask App Setup ---
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # Still needed for flashing messages, etc.
+app.config['MAX_CONTENT_LENGTH'] = Config.MAX_CONTENT_LENGTH
 
 # Store the original print and console from q_a module to restore later
 original_q_a_console_print = None
@@ -68,10 +70,10 @@ def sse_log_print(*args, **kwargs):
 # --- Routes ---
 @app.route("/", methods=["GET"])
 def index():
-    # ✅ 从环境变量获取 Neo4j 配置，传给前端显示
+    # ✅ 从Config模块获取 Neo4j 配置，传给前端显示
     neo4j_config = {
-        "uri": os.getenv("NEO4J_URI"),
-        "user": os.getenv("NEO4J_USER"),
+        "uri": Config.NEO4J_URI,
+        "user": Config.NEO4J_USER,
     }
     return render_template("index.html", neo4j_config=neo4j_config)
 
@@ -141,11 +143,11 @@ def ask_question():
                     finish_event.set()
                     return
 
-                # ✅ Use environment variables for Neo4j config
+                # ✅ Use Config module for Neo4j config
                 rag_system = q_a.Neo4jRAGSystem(
-                    neo4j_uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
-                    neo4j_user=os.getenv("NEO4J_USER", "neo4j"),
-                    neo4j_password=os.getenv("NEO4J_PASSWORD", "123456789"),
+                    neo4j_uri=Config.NEO4J_URI,
+                    neo4j_user=Config.NEO4J_USER,
+                    neo4j_password=Config.NEO4J_PASSWORD,
                     enable_multi_hop=multi_hop,
                     search_budget_mode=budget
                 )
@@ -196,9 +198,9 @@ def upload_image():
     if image_file.filename == '':
         return jsonify({"error": "No image file selected."}), 400
 
-    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff'}
+    # 使用Config中的允许扩展名
     if not (image_file.filename and '.' in image_file.filename and
-            image_file.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
+            image_file.filename.rsplit('.', 1)[1].lower() in Config.ALLOWED_EXTENSIONS):
         return jsonify({"error": "Unsupported file type. Please upload PNG, JPG, JPEG, GIF, BMP, or TIFF files."}), 400
 
     try:
@@ -259,11 +261,8 @@ def segmented_file(filename):
 def test_neo4j_connection():
     try:
         graph = Py2neoGraph(
-            os.getenv("NEO4J_URI", "bolt://localhost:7687"),
-            auth=(
-                os.getenv("NEO4J_USER", "neo4j"),
-                os.getenv("NEO4J_PASSWORD", "123456789")
-            )
+            Config.NEO4J_URI,
+            auth=(Config.NEO4J_USER, Config.NEO4J_PASSWORD)
         )
         graph.run("RETURN 1")
         app.logger.info("Neo4j connection successful at startup.")
@@ -275,4 +274,4 @@ def test_neo4j_connection():
 # --- Main ---
 if __name__ == "__main__":
     test_neo4j_connection()  # Test connection before starting server
-    app.run(debug=True, host="0.0.0.0", port=5001, threaded=True, use_reloader=False)
+    app.run(debug=Config.FLASK_DEBUG, host=Config.FLASK_HOST, port=Config.FLASK_PORT, threaded=True, use_reloader=False)

@@ -6,6 +6,7 @@ import os
 import requests
 import time
 from dotenv import load_dotenv
+from config import Config
 
 # 加载环境变量
 load_dotenv()
@@ -17,13 +18,9 @@ class ImageDescriptionService:
         """
         初始化图像描述服务，使用阿里云通义千问多模态模型
         """
-        self.api_key = os.getenv("ALI_API_KEY")
-        self.base_url = os.getenv("ALI_BASE_URL")
-        if not self.api_key:
-            raise EnvironmentError("请在 .env 中设置 ALI_API_KEY")
-        if not self.api_key:
-            raise EnvironmentError("请在 .env 中设置 ALI_API_KEY")
-        self.model = os.getenv("ALI_MODEL1", "qwen-vl-plus")
+        self.api_key = Config.ALI_API_KEY
+        self.base_url = Config.ALI_BASE_URL
+        self.model = Config.ALI_MODEL1
 
     def encode_image_to_base64(self, image_path):
         """
@@ -135,7 +132,7 @@ class ImageDescriptionService:
             # 发送请求
             start_time = time.time()
             url = f"{self.base_url}/chat/completions"
-            response = requests.post(url, headers=headers, json=data, timeout=60)
+            response = requests.post(url, headers=headers, json=data, timeout=Config.API_TIMEOUT)
 
             end_time = time.time()
             print(f"通义千问 VL 请求耗时: {end_time - start_time:.2f} 秒")
