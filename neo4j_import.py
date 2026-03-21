@@ -18,7 +18,7 @@ if not NEO4J_PASSWORD:
 graph = Graph(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
 # 读取JSON数据
-with open("症状.json", "r", encoding="utf-8") as f:
+with open("data/症状.json", "r", encoding="utf-8") as f:
     data = [json.loads(line) for line in f if line.strip()]
 
 
