@@ -21,8 +21,8 @@ class ImageDescriptionService:
         self.base_url = os.getenv("ALI_BASE_URL")
         if not self.api_key:
             raise EnvironmentError("请在 .env 中设置 ALI_API_KEY")
-        if not self.api_key:
-            raise EnvironmentError("请在 .env 中设置 ALI_API_KEY")
+        if not self.base_url:
+            raise EnvironmentError("请在 .env 中设置 ALI_BASE_URL")
         self.model = os.getenv("ALI_MODEL1", "qwen-vl-plus")
 
     def encode_image_to_base64(self, image_path):
@@ -57,6 +57,49 @@ class ImageDescriptionService:
 
         except Exception as e:
             return False, f"图像描述生成失败: {str(e)}"
+
+    def summarize_medical_description(self, description: str) -> tuple:
+        """
+        对医学影像描述文本进行摘要，提炼关键医学发现。
+        Args:
+            description: Qwen-VL 生成的完整描述文本
+        Returns:
+            tuple: (成功标志, 摘要文本或错误信息)
+        """
+        if not description or not description.strip():
+            return False, "描述内容为空"
+
+        prompt = f"""你是一名医学影像报告助手。请对以下医学影像分析描述进行摘要，
+要求：
+1. 提炼出影像类型、主要解剖结构、关键异常发现（如有）、可能涉及的疾病名称
+2. 输出为简洁的医学摘要，100字以内
+3. 仅保留对诊断有价值的信息，去除冗余描述
+4. 直接输出摘要内容，不需要标题或前缀
+
+原始描述：
+{description}"""
+
+        try:
+            url = f"{self.base_url}/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": os.getenv("ALI_MODEL0", "qwen-plus"),
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.1
+            }
+            response = requests.post(url, headers=headers, json=data, timeout=30)
+            if response.status_code == 200:
+                result = response.json()
+                if 'choices' in result and result['choices']:
+                    summary = result['choices'][0]['message']['content'].strip()
+                    return True, summary
+                return False, "摘要响应格式异常"
+            return False, f"摘要请求失败: {response.status_code}"
+        except Exception as e:
+            return False, f"摘要生成失败: {str(e)}"
 
     def describe_single_image(self, image_path, custom_prompt=None):
         """

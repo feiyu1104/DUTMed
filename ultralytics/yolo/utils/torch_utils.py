@@ -390,7 +390,7 @@ def strip_optimizer(f: Union[str, Path] = 'best.pt', s: str = '') -> None:
     except ImportError:
         import pickle
 
-    x = torch.load(f, map_location=torch.device('cpu'))
+    x = torch.load(f, map_location=torch.device('cpu'), weights_only=False)
     args = {**DEFAULT_CFG_DICT, **x['train_args']} if 'train_args' in x else None  # combine args
     if x.get('ema'):
         x['model'] = x['ema']  # replace model with ema

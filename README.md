@@ -15,7 +15,9 @@
 - ✅ **智能问答**：基于医学知识图谱 + LLM，精准回答疾病、症状、药品、检查等问题
 - ✅ **多跳推理**：支持单跳/多跳查询，深入挖掘关联实体
 - ✅ **预算控制**：支持 `Deep` / `Deeper` 模式，平衡速度与深度
-- ✅ **图像理解**：上传医学图像 → 自动分割 → 生成结构化描述
+- ✅ **图像理解**：上传医学图像 → 自动分割 → AI 影像描述 → 摘要提炼 → 关联知识图谱
+- ✅ **文档入库**：上传 TXT / JSON / MD / CSV / PDF → 自动切片、LLM 抽取实体关系、写入 Neo4j
+- ✅ **多轮对话**：浏览器 Session 级别的对话记忆，支持指代消解与上下文连贯问答
 - ✅ **流式响应**：实时显示思考过程，透明可解释
 - ✅ **快速使用**：提供交互式前端，可一键部署使用
 
@@ -60,8 +62,14 @@ NEO4J_PASSWORD=your_password_here
 # 阿里云通义千问 API
 ALI_API_KEY=your_api_key_here
 ALI_BASE_URL=https://dashscope.aliyuncs.com/api/v1
-ALI_MODEL0 = 'qwen-plus'  # 用于实体识别和答案生成
-ALI_MODEL1 = 'qwen-vl-plus'  # 用于图像描述
+ALI_MODEL0=qwen-plus        # 用于实体识别、答案生成、文档抽取、影像摘要
+ALI_MODEL1=qwen-vl-plus     # 用于医学图像描述（多模态）
+
+# 可选：文件上传大小限制（单位 MB，默认 50）
+# MAX_UPLOAD_MB=50
+
+# 可选：对话记忆保留时长（单位小时，默认 2）
+# SESSION_MAX_AGE_HOURS=2
 ```
 
 > 💡 如无阿里云账号，可替换为其他 LLM API（如 OpenAI、本地模型），需修改 `q_a.py` 中 `call_llm` 方法。
@@ -81,9 +89,19 @@ python app.py
 ### 1.Web 界面模式
 
 适合：演示、团队协作、非技术人员使用
-特点：图形化界面、支持图像上传、实时日志流、模式切换
+特点：图形化界面、支持图像上传与文档入库、多轮对话记忆、实时日志流、模式切换
 
 #### 启动方式：见🚀 快速开始
+
+#### 工具栏说明
+
+| 按钮/控件 | 功能 |
+|-----------|------|
+| 🧠 深度搜索 (多跳/单跳) | 切换多跳推理模式 |
+| 🗑️ 清除记忆 | 清除当前会话对话历史，开启新会话 |
+| 搜索预算 Deep / Deeper | 控制知识图谱查询范围与深度 |
+| 📎 上传图片 | 上传医学图像，自动分割 → 描述 → 摘要 → 知识图谱关联分析 |
+| 📄 上传文档 | 上传 TXT/JSON/MD/CSV/PDF，自动抽取实体关系写入 Neo4j |
 
 ### 2. 终端命令行模式
 
@@ -137,20 +155,33 @@ python q_a.py --disable_multi_hop
 
 ## 🛠️ 技术架构
 
-```无
+```
 Frontend (HTML/CSS/JS)
      ↓ SSE / Fetch
 Flask (app.py)
+     ├── /ask          问答接口（SSE 流式）
+     ├── /upload_image 图像上传接口
+     ├── /upload_document 文档上传接口
+     └── /clear_history 清除对话记忆
      ↓
 Neo4jRAGSystem (q_a.py)
+     ├── 多轮对话改写（指代消解）
      ├── 实体关系抽取（LLM）
      ├── 知识图谱查询（Neo4j）
-     ├── 多跳推理（可选）
-     └── 答案生成（LLM）
+     │    ├── 一跳查询 + Embedding 相似度排序
+     │    ├── 多跳推理（可选）
+     │    └── SourceChunk 原文片段检索
+     └── 答案生成（LLM + 对话历史注入）
      ↓
 图像模块
-     ├── 图像分割（SAM/本地模型）
-     └── 图像描述（LLM/Vision Model）
+     ├── 图像分割（FastSAM）        → image_segmentation.py
+     ├── 图像描述（Qwen-VL）        → image_description.py
+     └── 影像摘要（Qwen-Plus）      → image_description.py
+     ↓
+文档入库模块（document_ingestion.py）
+     ├── 文本切片（800字/120重叠）
+     ├── 实体关系抽取（LLM）
+     └── 写入 Neo4j（SourceDocument / SourceChunk / 实体节点）
 ```
 
 ## 📊 数据说明
@@ -187,7 +218,19 @@ Neo4jRAGSystem (q_a.py)
 | `RECOMMENDS_RECIPE`  | 疾病推荐某食谱     | (肺炎)-[:RECOMMENDS_RECIPE]->(百合粥)  |
 | `ACCOMPANIES`        | 疾病伴随其他疾病   | (糖尿病)-[:ACCOMPANIES]->(高血压)      |
 
-### 3.疾病节点属性
+### 3. 文档入库新增节点类型
+
+通过「上传文档」功能写入 Neo4j 的节点类型：
+
+| 节点类型 | 标签 | 描述 |
+|----------|------|------|
+| 来源文档 | `SourceDocument` | 上传文件的元信息（文件名、哈希 ID） |
+| 文档切片 | `SourceChunk` | 文档分块原文，与实体节点通过 `[:MENTIONS]` 关联 |
+| 医学实体 | （同上表 9 种）| LLM 从文档中抽取，按类型 MERGE 到已有节点 |
+
+问答时系统会同时检索知识图谱和 SourceChunk 原文片段，两路内容一并送入 LLM 生成答案。
+
+### 4.疾病节点属性
 
 每个疾病节点包含以下属性：
 
@@ -259,7 +302,15 @@ Neo4jRAGSystem (q_a.py)
 | `Deeper`+ 单跳 |  🌲 深度  |   🐢 慢   |   中    |       深度聚焦分析       |
 | `Deeper`+ 多跳 |  🌳 超深  |  🐢🐢 慢   |   多    | 科研、复杂推理、完整答案 |
 
-> ⚠️ **注意**：每次查询都会调用多次 Embedding API（计算相似度）和 1~2 次 Chat API（抽取 + 生成），请合理控制使用频率，避免 API 限流或费用超支。 
+> ⚠️ **注意**：每次查询都会调用多次 Embedding API（计算相似度）和 1~2 次 Chat API（抽取 + 生成），请合理控制使用频率，避免 API 限流或费用超支。
+
+### 4. 其他可选配置
+
+| 环境变量 | 默认值 | 说明 |
+|----------|--------|------|
+| `MAX_UPLOAD_MB` | `50` | 单次上传文件大小上限（MB） |
+| `SESSION_MAX_AGE_HOURS` | `2` | 对话记忆保留时长（超时自动清除） |
+| `FILE_MAX_AGE_HOURS` | `24` | uploads/segmented 目录临时文件保留时长 |
 
 ## 📬 联系与支持
 
@@ -279,6 +330,10 @@ Neo4jRAGSystem (q_a.py)
 - [Rich ](https://github.com/Textualize/rich)— 终端美化输出
 
 - [Flask ](https://flask.palletsprojects.com/)— Web 框架
+
+- [ansi2html](https://github.com/pycontribs/ansi2html) — 将 Rich 终端彩色输出转为 HTML
+
+- [pypdf](https://github.com/py-pdf/pypdf) — PDF 文本提取（可选，文档入库时使用）
 
 - 感谢所有**贡献者**！完整名单请见 [CONTRIBUTORS.md](CONTRIBUTORS.md)
 

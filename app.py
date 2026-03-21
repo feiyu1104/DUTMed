@@ -1,6 +1,7 @@
 import os
 import json
 import io
+import time
 import threading
 import queue  # For thread-safe communication
 from flask import Flask, render_template, request, Response, stream_with_context, jsonify, send_from_directory
@@ -10,6 +11,7 @@ from ansi2html import Ansi2HTMLConverter  # For converting rich's ANSI output to
 from py2neo import Graph as Py2neoGraph  # Explicit import for clarity
 from image_segmentation import image_segmentation_service  # Import image segmentation service
 from image_description import image_description_service  # Import image description service
+from document_ingestion import document_ingestion_service  # Import document ingestion service
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -18,51 +20,112 @@ load_dotenv()
 # --- Flask App Setup ---
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # Still needed for flashing messages, etc.
+# 限制上传文件大小：图片最大 20 MB，文档最大 50 MB，取较大值作为统一上限
+# 可通过环境变量 MAX_UPLOAD_MB 调整（单位：MB）
+app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_UPLOAD_MB', '50')) * 1024 * 1024
 
-# Store the original print and console from q_a module to restore later
-original_q_a_console_print = None
-original_q_a_console_file = None
-current_sse_yield_callback = None
+# --- RAG System Instance Cache ---
+# Key: (enable_multi_hop: bool, search_budget_mode: str) — at most 4 combinations
+_rag_instances: dict = {}
+_rag_instances_lock = threading.Lock()
 
-# --- Helper for Log Streaming ---
-def sse_log_print(*args, **kwargs):
+# --- Conversation History Storage ---
+# Key: session_id (str) → list of {"role": "user"/"assistant", "content": str, "ts": float}
+_conversation_history: dict = {}
+_history_lock = threading.Lock()
+_SESSION_MAX_AGE_SECONDS = int(os.getenv("SESSION_MAX_AGE_HOURS", "2")) * 3600
+_SESSION_MAX_TURNS = 20  # max messages to keep per session (10 rounds)
+
+
+def get_history(session_id: str) -> list:
+    """Return a copy of the message list for the given session."""
+    with _history_lock:
+        entry = _conversation_history.get(session_id)
+        if entry is None:
+            return []
+        return list(entry["messages"])
+
+
+def update_history(session_id: str, user_msg: str, assistant_msg: str):
+    """Append a user/assistant turn to the session history."""
+    with _history_lock:
+        if session_id not in _conversation_history:
+            _conversation_history[session_id] = {"messages": [], "last_active": time.time()}
+        entry = _conversation_history[session_id]
+        entry["messages"].append({"role": "user", "content": user_msg})
+        entry["messages"].append({"role": "assistant", "content": assistant_msg})
+        # Keep only the most recent turns
+        if len(entry["messages"]) > _SESSION_MAX_TURNS:
+            entry["messages"] = entry["messages"][-_SESSION_MAX_TURNS:]
+        entry["last_active"] = time.time()
+
+
+def clear_history(session_id: str):
+    """Remove session history (e.g., user clicked 清除记忆)."""
+    with _history_lock:
+        _conversation_history.pop(session_id, None)
+
+
+def get_rag_system(multi_hop: bool, budget: str):
+    """Return a cached Neo4jRAGSystem for the given parameter combination."""
+    key = (multi_hop, budget)
+    if key not in _rag_instances:
+        with _rag_instances_lock:
+            if key not in _rag_instances:
+                _rag_instances[key] = q_a.Neo4jRAGSystem(
+                    neo4j_uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+                    neo4j_user=os.getenv("NEO4J_USER", "neo4j"),
+                    neo4j_password=os.getenv("NEO4J_PASSWORD", "123456789"),
+                    enable_multi_hop=multi_hop,
+                    search_budget_mode=budget,
+                )
+    return _rag_instances[key]
+
+
+# --- 线程安全的日志流 ---
+class ThreadLocalStream(io.TextIOBase):
     """
-    Monkey-patched print function for q_a.console.
-    Captures rich output and yields it for SSE.
+    将 write() 调用分发到各请求线程自己注册的流。
+    q_a.console.file 启动时设为此对象（一次性），
+    每个 worker 线程通过 set_stream / clear_stream 注册/注销自己的 SSE 包装器，
+    彻底消除多并发请求互相覆盖 console.file 的竞态条件。
     """
-    global current_sse_yield_callback
-    if not current_sse_yield_callback:
-        if original_q_a_console_print:
-            original_q_a_console_print(*args, **kwargs)
-        return
+    def __init__(self):
+        self._local = threading.local()
 
-    s_io = io.StringIO()
-    if args and hasattr(args[0], '__rich_console__'):
-        temp_console_for_export = Console(file=s_io, record=True, width=100, force_terminal=False, color_system=None)
-        temp_console_for_export.print(*args, **kwargs)
-        s_io.seek(0)
-        s_io.truncate(0)
-        recorded_console = Console(file=s_io, record=True, width=100)
-        recorded_console.print(*args, **kwargs)
-        html_content = recorded_console.export_html(inline_styles=True, code_format="<pre class=\"code\">{code}</pre>")
+    def set_stream(self, stream):
+        self._local.stream = stream
 
-        if "<!DOCTYPE html>" in html_content:
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(html_content, 'html.parser')
-            body_content = soup.body.decode_contents() if soup.body else html_content
-            body_content = body_content.replace("background-color:#ffffff;", "", 1).replace("color:#000000;", "", 1)
-            current_sse_yield_callback(f"data: {json.dumps({'type': 'log_html', 'content': body_content})}\n\n")
-    else:
-        temp_console_for_ansi = Console(file=s_io, force_terminal=True, color_system="truecolor", width=100)
-        temp_console_for_ansi.print(*args, **kwargs)
-        ansi_output = s_io.getvalue()
-        conv = Ansi2HTMLConverter(inline=True, scheme="solarized", linkify=False, dark_bg=True)
-        html_output = conv.convert(ansi_output, full=False)
-        log_content = f'<div class="log-entry-raw">{html_output}</div>'
-        current_sse_yield_callback(f"data: {json.dumps({'type': 'log_html', 'content': log_content})}\n\n")
+    def clear_stream(self):
+        try:
+            del self._local.stream
+        except AttributeError:
+            pass
 
-    if original_q_a_console_print:
-        original_q_a_console_print(*args, **kwargs)
+    def _get_stream(self):
+        return getattr(self._local, 'stream', None)
+
+    def write(self, s: str):
+        stream = self._get_stream()
+        if stream:
+            return stream.write(s)
+        return len(s) if isinstance(s, str) else 0
+
+    def flush(self):
+        stream = self._get_stream()
+        if stream:
+            stream.flush()
+
+    def isatty(self): return False
+    def readable(self): return False
+    def seekable(self): return False
+    def writable(self): return True
+
+
+_thread_local_stream = ThreadLocalStream()
+# 启动时将全局 console 的输出重定向到线程局部流（一次性，永不再改）
+if hasattr(q_a, 'console'):
+    q_a.console.file = _thread_local_stream
 
 
 # --- Routes ---
@@ -76,15 +139,27 @@ def index():
     return render_template("index.html", neo4j_config=neo4j_config)
 
 
+@app.route("/clear_history", methods=["POST"])
+def clear_history_route():
+    data = request.json or {}
+    session_id = data.get("session_id", "").strip()
+    if session_id:
+        clear_history(session_id)
+    return jsonify({"success": True})
+
+
 @app.route("/ask", methods=["POST"])
 def ask_question():
     data = request.json
     question_text = data.get("question")
     enable_multi_hop = data.get("enable_multi_hop", True)
     search_budget = data.get("search_budget", "Deeper")
+    session_id = data.get("session_id", "").strip()
 
     if not question_text:
         return Response(json.dumps({"error": "No question provided."}), status=400, mimetype='application/json')
+
+    history = get_history(session_id) if session_id else []
 
     def generate_response_stream():
         message_queue = queue.Queue()
@@ -126,32 +201,17 @@ def ask_question():
             def seekable(self): return False
             def writable(self): return True
 
-        def rag_worker(q, question, multi_hop, budget, finish_event):
-            original_q_a_console_file = None
+        def rag_worker(q, question, multi_hop, budget, finish_event, conv_history, sess_id):
             worker_sse_wrapper = SseLogStreamWrapper(q)
-
+            # 将本线程的日志输出注册到线程局部流，与其他并发请求完全隔离
+            _thread_local_stream.set_stream(worker_sse_wrapper)
             try:
-                if hasattr(q_a, 'console') and hasattr(q_a.console, 'file'):
-                    original_q_a_console_file = q_a.console.file
-
-                if hasattr(q_a, 'console'):
-                    q_a.console.file = worker_sse_wrapper
-                else:
-                    q.put({'type': 'error', 'content': 'Internal error: q_a.console not found.'})
-                    finish_event.set()
-                    return
-
-                # ✅ Use environment variables for Neo4j config
-                rag_system = q_a.Neo4jRAGSystem(
-                    neo4j_uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
-                    neo4j_user=os.getenv("NEO4J_USER", "neo4j"),
-                    neo4j_password=os.getenv("NEO4J_PASSWORD", "123456789"),
-                    enable_multi_hop=multi_hop,
-                    search_budget_mode=budget
-                )
-
-                final_answer = rag_system.answer_question(question)
+                rag_system = get_rag_system(multi_hop, budget)
+                final_answer = rag_system.answer_question(question, history=conv_history)
                 worker_sse_wrapper.flush()
+                # 将本轮对话写回历史
+                if sess_id:
+                    update_history(sess_id, question, final_answer)
                 q.put({'type': 'answer', 'content': final_answer})
 
             except Exception as e:
@@ -162,13 +222,13 @@ def ask_question():
                     pass
                 q.put({'type': 'error', 'content': f"An error occurred: {str(e)}"})
             finally:
-                if original_q_a_console_file is not None and hasattr(q_a, 'console'):
-                    q_a.console.file = original_q_a_console_file
+                _thread_local_stream.clear_stream()
                 finish_event.set()
                 q.put({'type': 'finished'})
 
         worker_thread = threading.Thread(target=rag_worker, args=(
-            message_queue, question_text, enable_multi_hop, search_budget, finished_signal))
+            message_queue, question_text, enable_multi_hop, search_budget,
+            finished_signal, history, session_id))
         worker_thread.start()
 
         while not finished_signal.is_set() or not message_queue.empty():
@@ -231,18 +291,58 @@ def upload_image():
             app.logger.warning(f"图像描述失败: {description}")
             description = "图像描述生成失败，但图像分割已完成。"
 
+        # 对描述进行摘要，用于后续 RAG 查询
+        summary = description  # 默认退回原文
+        if success and description:
+            sum_ok, sum_text = image_description_service.summarize_medical_description(description)
+            if sum_ok and sum_text:
+                summary = sum_text
+                app.logger.info(f"影像描述摘要完成: {summary[:80]}...")
+            else:
+                app.logger.warning(f"摘要生成失败，使用原始描述: {sum_text}")
+
         app.logger.info(f"图像分割和描述完成: {segmented_path}")
         return jsonify({
             "success": True,
             "original_image": f"/uploads/{os.path.basename(original_path)}",
             "segmented_image": f"/segmented/{os.path.basename(segmented_path)}",
             "segmentation_info": seg_info,
-            "description": description
+            "description": description,
+            "summary": summary
         })
 
     except Exception as e:
         app.logger.error(f"图像分割过程中出错: {e}", exc_info=True)
         return jsonify({"error": f"Image segmentation error: {str(e)}"}), 500
+
+
+@app.route('/upload_document', methods=['POST'])
+def upload_document():
+    """处理文档上传并自动抽取实体关系入库"""
+    if 'document' not in request.files:
+        return jsonify({"error": "No document file uploaded."}), 400
+
+    document_file = request.files['document']
+    if document_file.filename == '':
+        return jsonify({"error": "No document file selected."}), 400
+
+    if not document_ingestion_service.is_allowed_file(document_file.filename):
+        return jsonify({"error": "Unsupported file type. Please upload TXT, JSON, MD, CSV, or PDF files."}), 400
+
+    try:
+        app.logger.info(f"开始处理文档文件: {document_file.filename}")
+        saved_path = document_ingestion_service.save_uploaded_file(document_file)
+        ingest_result = document_ingestion_service.ingest_file(saved_path, document_file.filename)
+        app.logger.info(f"文档入库完成: {ingest_result}")
+
+        return jsonify({
+            "success": True,
+            "message": "Document ingested successfully.",
+            "result": ingest_result
+        })
+    except Exception as e:
+        app.logger.error(f"文档入库过程中出错: {e}", exc_info=True)
+        return jsonify({"error": f"Document ingestion error: {str(e)}"}), 500
 
 
 @app.route('/uploads/<filename>')
@@ -253,6 +353,12 @@ def uploaded_file(filename):
 @app.route('/segmented/<filename>')
 def segmented_file(filename):
     return send_from_directory('static/segmented', filename)
+
+
+@app.errorhandler(413)
+def request_entity_too_large(e):
+    limit_mb = app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)
+    return jsonify({"error": f"文件过大，上传限制为 {limit_mb} MB。"}), 413
 
 
 # --- Startup Neo4j Connection Test ---
@@ -269,10 +375,73 @@ def test_neo4j_connection():
         app.logger.info("Neo4j connection successful at startup.")
     except Exception as e:
         app.logger.error(f"Neo4j connection failed at startup: {e}")
-        # Optional: sys.exit(1) if you want to crash on failure
+
+
+# --- 临时文件清理 ---
+# 图像上传/分割产生的文件无需永久保留，超过保留期后自动删除。
+# documents/ 目录存放已入库的文档，有持久价值，不纳入清理范围。
+_CLEANUP_DIRS = [
+    os.path.join("static", "uploads"),
+    os.path.join("static", "segmented"),
+]
+_FILE_MAX_AGE_SECONDS = int(os.getenv("FILE_MAX_AGE_HOURS", "24")) * 3600
+_CLEANUP_INTERVAL_SECONDS = 3600  # 每小时扫描一次
+
+
+def _cleanup_old_files():
+    """删除 uploads/ 和 segmented/ 中超过保留期的文件；清理过期 session 历史。"""
+    import time as _time
+    now = _time.time()
+    total = 0
+    for directory in _CLEANUP_DIRS:
+        if not os.path.isdir(directory):
+            continue
+        for filename in os.listdir(directory):
+            filepath = os.path.join(directory, filename)
+            if not os.path.isfile(filepath):
+                continue
+            try:
+                age = now - os.path.getmtime(filepath)
+                if age > _FILE_MAX_AGE_SECONDS:
+                    os.remove(filepath)
+                    total += 1
+            except OSError:
+                pass
+    if total:
+        app.logger.info(f"文件清理：已删除 {total} 个过期临时文件。")
+
+    # 清理过期 session 历史
+    expired_sessions = []
+    with _history_lock:
+        for sid, entry in _conversation_history.items():
+            if now - entry["last_active"] > _SESSION_MAX_AGE_SECONDS:
+                expired_sessions.append(sid)
+        for sid in expired_sessions:
+            del _conversation_history[sid]
+    if expired_sessions:
+        app.logger.info(f"会话清理：已清除 {len(expired_sessions)} 个过期会话历史。")
+
+
+def _cleanup_worker():
+    """后台守护线程：启动时立即清理一次，此后每隔 1 小时再次清理。"""
+    import time as _time
+    _cleanup_old_files()
+    while True:
+        _time.sleep(_CLEANUP_INTERVAL_SECONDS)
+        _cleanup_old_files()
+
+
+def _start_cleanup_thread():
+    t = threading.Thread(target=_cleanup_worker, daemon=True, name="file-cleanup")
+    t.start()
+    app.logger.info(
+        f"文件清理线程已启动（保留期 {_FILE_MAX_AGE_SECONDS // 3600} 小时，"
+        f"扫描间隔 {_CLEANUP_INTERVAL_SECONDS // 3600} 小时）。"
+    )
 
 
 # --- Main ---
 if __name__ == "__main__":
-    test_neo4j_connection()  # Test connection before starting server
+    test_neo4j_connection()
+    _start_cleanup_thread()
     app.run(debug=True, host="0.0.0.0", port=5001, threaded=True, use_reloader=False)

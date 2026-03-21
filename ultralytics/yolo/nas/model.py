@@ -50,7 +50,7 @@ class NAS:
 
     @smart_inference_mode()
     def _load(self, weights: str):
-        self.model = torch.load(weights)
+        self.model = torch.load(weights, weights_only=False)
 
     @smart_inference_mode()
     def predict(self, source=None, stream=False, **kwargs):

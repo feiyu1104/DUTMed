@@ -53,6 +53,12 @@ tmp/
 static/uploads/
 static/segmented/
 
+# User-uploaded documents (ingested into Neo4j, no need to track)
+static/documents/
+
+# Claude Code local session data
+.claude/
+
 # Jupyter Notebook
 .ipynb_checkpoints/
 *.ipynb

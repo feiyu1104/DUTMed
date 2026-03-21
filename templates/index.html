@@ -33,6 +33,7 @@
                  <!-- Chat messages will be appended here -->
             </div>
         </div>
+
     </div>
 
     <div class="input-area">
@@ -40,7 +41,10 @@
             <button id="deep-search-btn" class="control-btn" data-enabled="true" title="多跳查询已 开启">
                 <span class="icon">🧠</span> 深度搜索 (多跳)
             </button>
-            <div class="budget-control">
+            <button id="clear-memory-btn" class="control-btn" title="清除本次对话记忆，开启新会话">
+                <span class="icon">🗑️</span> 清除记忆
+            </button>
+<div class="budget-control">
                 <label for="search-budget">搜索预算:</label>
                 <select id="search-budget" class="control-select">
                     <option value="Deeper" selected>Deeper</option>
@@ -51,6 +55,10 @@
                 <label class="file-upload-label" title="上传文件">
                     <input type="file" class="file-upload-input" style="display:none;">
                     <span style="font-size:1.3em">📎</span> 上传图片
+                </label>
+                <label class="file-upload-label document-upload-label" title="上传文档">
+                    <input type="file" class="document-upload-input" style="display:none;" accept=".txt,.json,.md,.csv,.pdf">
+                    <span style="font-size:1.3em">📄</span> 上传文档
                 </label>
             </div>
         </div>

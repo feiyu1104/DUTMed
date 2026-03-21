@@ -4,6 +4,7 @@
 import os
 import json
 import time
+import threading
 import requests
 from typing import Dict, List
 from dotenv import load_dotenv
@@ -30,6 +31,11 @@ if not ALI_BASE_URL:
 
 # 初始化rich控制台
 console = Console()
+
+# --- Embedding 缓存（模块级，所有实例共享）---
+# key: 文本字符串  value: embedding 向量
+_embedding_cache: Dict[str, List[float]] = {}
+_embedding_cache_lock = threading.Lock()
 
 
 class Neo4jRAGSystem:
@@ -288,7 +294,11 @@ class Neo4jRAGSystem:
                 return {"entities": [], "relations": []}
 
     def get_embedding(self, text: str) -> List[float]:
-        """获取文本的向量表示（阿里云通义千问API embedding）"""
+        """获取文本的向量表示（阿里云通义千问API embedding，带本地缓存）"""
+        # 命中缓存直接返回，无需 API 调用
+        if text in _embedding_cache:
+            return _embedding_cache[text]
+
         max_retries = 3
         base_delay = 1.0
         headers = {
@@ -317,6 +327,9 @@ class Neo4jRAGSystem:
                 result = response.json()
                 if 'data' in result and len(result['data']) > 0 and 'embedding' in result['data'][0]:
                     embedding_vector = result['data'][0]['embedding']
+                    # 写入缓存（加锁保证多线程安全）
+                    with _embedding_cache_lock:
+                        _embedding_cache[text] = embedding_vector
                     return embedding_vector
                 else:
                     raise Exception(f"嵌入API返回格式错误: {result}")
@@ -384,7 +397,8 @@ class Neo4jRAGSystem:
 
         result = {
             "entity_properties": [],
-            "related_triples": []
+            "related_triples": [],
+            "source_chunks": []
         }
         # 存储已查询过的实体，避免重复查询
         processed_entities = set()
@@ -524,19 +538,21 @@ class Neo4jRAGSystem:
                 entity_name = entity.get("name")
                 self.console.print(f"  查询与 [cyan]{entity_name}[/cyan] 相连的实体")
                 # 查询与该实体相连的所有其他实体
+                # 注意：Cypher LIMIT 设为预算的10倍，保证所有关系类型都能取到；
+                # 最终结果数量由下方 grouped（每种关系类型最多5条）控制。
                 query1 = f"""
-                MATCH (n)-[r]->(m)  
-                WHERE n.name = $name  
-                AND any(label IN labels(m) WHERE label IN ['Disease', 'Category', 'Symptom', 'Department', 'Treatment', 'Check', 'Drug', 'Food', 'Recipe'])  
-                RETURN n, r, m, type(r) AS rel_type  
-                LIMIT {self.search_budget['one_hop_limit']}  
+                MATCH (n)-[r]->(m)
+                WHERE n.name = $name
+                AND any(label IN labels(m) WHERE label IN ['Disease', 'Category', 'Symptom', 'Department', 'Treatment', 'Check', 'Drug', 'Food', 'Recipe'])
+                RETURN n, r, m, type(r) AS rel_type
+                LIMIT {self.search_budget['one_hop_limit'] * 10}
                 """
-                query2 = f""" 
-                MATCH (n)<-[r]-(m)  
-                WHERE n.name = $name  
-                AND any(label IN labels(m) WHERE label IN ['Disease', 'Category', 'Symptom', 'Department', 'Treatment', 'Check', 'Drug', 'Food', 'Recipe'])  
-                RETURN n, r, m, type(r) AS rel_type  
-                LIMIT {self.search_budget['one_hop_limit']}
+                query2 = f"""
+                MATCH (n)<-[r]-(m)
+                WHERE n.name = $name
+                AND any(label IN labels(m) WHERE label IN ['Disease', 'Category', 'Symptom', 'Department', 'Treatment', 'Check', 'Drug', 'Food', 'Recipe'])
+                RETURN n, r, m, type(r) AS rel_type
+                LIMIT {self.search_budget['one_hop_limit'] * 10}
                 """
                 try:
                     results1 = self.graph.run(query1, name=entity_name).data()
@@ -694,9 +710,55 @@ class Neo4jRAGSystem:
                 second_hop_count = sum(1 for triple in result["related_triples"] if triple.get("hop") == 2)
                 if second_hop_count > 0:
                     self.console.print(f"其中包含 {second_hop_count} 个第二跳查询结果", style="bold yellow")
+
+        # 6. 查询文档片段（来自用户上传文档的 SourceChunk 原文）
+        if processed_entities:
+            try:
+                names_list = list(processed_entities)
+                # 优先：通过 [:MENTIONS] 关系精确匹配
+                chunk_query = """
+                MATCH (c:SourceChunk)-[:MENTIONS]->(e)
+                WHERE e.name IN $names
+                RETURN c.content AS content, c.chunk_id AS chunk_id, e.name AS entity_name
+                ORDER BY c.chunk_index
+                LIMIT 5
+                """
+                chunks = self.graph.run(chunk_query, names=names_list).data()
+
+                # 兜底：实体名称可能因 LLM 提取差异（括号、缩写等）与入库名称不完全一致，
+                # 改为直接在 SourceChunk 原文中做关键词 CONTAINS 搜索
+                if not chunks:
+                    self.console.print("[:MENTIONS] 未命中，尝试关键词匹配...", style="yellow")
+                    fallback_query = """
+                    MATCH (c:SourceChunk)
+                    WHERE ANY(name IN $names WHERE c.content CONTAINS name)
+                    RETURN c.content AS content, c.chunk_id AS chunk_id,
+                           [name IN $names WHERE c.content CONTAINS name][0] AS entity_name
+                    ORDER BY c.chunk_index
+                    LIMIT 5
+                    """
+                    chunks = self.graph.run(fallback_query, names=names_list).data()
+
+                if chunks:
+                    seen_chunk_ids = set()
+                    for chunk in chunks:
+                        chunk_id = chunk["chunk_id"]
+                        if chunk_id not in seen_chunk_ids:
+                            seen_chunk_ids.add(chunk_id)
+                            result["source_chunks"].append({
+                                "entity": chunk["entity_name"],
+                                "content": chunk["content"]
+                            })
+                    self.console.print(
+                        f"找到 [bold]{len(result['source_chunks'])}[/bold] 个相关文档片段",
+                        style="bold cyan"
+                    )
+            except Exception as e:
+                self.console.print(f"查询文档片段出错: {str(e)}", style="bold red")
+
         return result
 
-    def generate_answer(self, question: str, knowledge: Dict) -> str:
+    def generate_answer(self, question: str, knowledge: Dict, history: List[Dict] = None) -> str:
         """生成答案"""
         self.console.print(Panel("[bold purple]生成回答[/bold purple]", border_style="purple", expand=False))
 
@@ -730,17 +792,32 @@ class Neo4jRAGSystem:
                         "similarity": round(triple.get("similarity", 0.0), 2)
                     }
                     triples_summary.append(simplified_triple)
+                # 构建对话历史文本
+                history_text = ""
+                if history:
+                    lines = [
+                        f"{'用户' if m['role'] == 'user' else '助手'}：{m['content'][:300]}"
+                        for m in history[-6:]
+                    ]
+                    history_text = "\n\n对话历史（仅供参考，保持回答连贯）：\n" + "\n".join(lines)
+                # 构建文档原文片段文本
+                source_chunks_text = ""
+                source_chunks = knowledge.get("source_chunks", [])
+                if source_chunks:
+                    lines = [f"- [{c['entity']}] {c['content'][:400]}" for c in source_chunks]
+                    source_chunks_text = "\n\n原文片段（来自用户上传文档，可作为补充参考）：\n" + "\n".join(lines)
                 # 构建简化的提示词
                 full_prompt = f"""{self.answer_generation_prompt}
                 问题：{question}
-                
+
                 知识图谱信息：
                 相关实体（共{len(entities_summary)}个）：
                 {json.dumps(entities_summary, ensure_ascii=False, indent=2)}
-                
+
                 相关关系（共{len(triples_summary)}个，按相似度排序）：
                 {json.dumps(triples_summary, ensure_ascii=False, indent=2)}
-                
+                {source_chunks_text}
+                {history_text}
                 请基于以上医学知识图谱信息回答问题。如果信息不足以回答问题，请说明。"""
                 # 检查提示词长度
                 prompt_length = len(full_prompt)
@@ -760,11 +837,11 @@ class Neo4jRAGSystem:
                         for t in limited_triples])
 
                     full_prompt = f"""{self.answer_generation_prompt}
-                    问题：{question} 
+                    问题：{question}
                     知识图谱信息：
                     相关实体：{entities_text}
                     相关关系：{triples_text}
-                    
+                    {source_chunks_text}
                     请基于以上医学知识图谱信息回答问题。"""
                     self.console.print(f"缩减后提示词长度: {len(full_prompt):,} 字符", style="blue")
                 self.console.print("阿里云通义千问思考中...", style="blue")
@@ -777,15 +854,50 @@ class Neo4jRAGSystem:
                 self.console.print(f"生成答案出错: {str(e)}", style="bold red")
                 return "抱歉，我无法回答这个问题。"
 
-    def answer_question(self, question: str) -> str:
+    def rewrite_question_with_history(self, question: str, history: List[Dict]) -> str:
+        """
+        若当前问题含指代词或省略主语，结合对话历史将其改写为独立完整的问题。
+        历史为空时直接返回原问题，不消耗 API 调用。
+        """
+        if not history:
+            return question
+
+        history_text = "\n".join(
+            f"{'用户' if m['role'] == 'user' else '助手'}：{m['content'][:300]}"
+            for m in history[-6:]
+        )
+        prompt = (
+            f"以下是对话历史：\n{history_text}\n\n"
+            f"当前问题：{question}\n\n"
+            "若当前问题含有指代词（如'它'、'这个'、'该病'、'上述'等）或省略了主语，"
+            "请将其改写为无需上下文即可独立理解的完整问题。"
+            "若问题已完整，原文返回。只输出改写后的问题，不要任何解释。"
+        )
+        try:
+            rewritten = self.call_llm(prompt, temperature=0.1).strip()
+            if rewritten and rewritten != question:
+                self.console.print(
+                    f"问题改写: [dim]{question}[/dim] → [cyan]{rewritten}[/cyan]"
+                )
+            return rewritten if rewritten else question
+        except Exception:
+            return question
+
+    def answer_question(self, question: str, history: List[Dict] = None) -> str:
         """回答问题的主函数"""
-        # 1. 提取实体和关系
+        if history is None:
+            history = []
+
         self.console.print(Panel(f"[bold]问题[/bold]: {question}",
                                  title="医学知识图谱问答系统",
                                  border_style="cyan",
                                  expand=False))
 
-        extraction_result = self.extract_entities_relations(question)
+        # 0. 结合历史改写问题，消解指代
+        effective_question = self.rewrite_question_with_history(question, history)
+
+        # 1. 提取实体和关系
+        extraction_result = self.extract_entities_relations(effective_question)
 
         # 2. 查询Neo4j数据库
         knowledge = self.query_neo4j(
@@ -793,8 +905,8 @@ class Neo4jRAGSystem:
             extraction_result["relations"]
         )
 
-        # 3. 生成答案
-        answer = self.generate_answer(question, knowledge)
+        # 3. 生成答案（携带历史，让 LLM 保持对话连贯性）
+        answer = self.generate_answer(effective_question, knowledge, history=history)
 
         # 4. 展示答案
         self.console.print(Panel(Markdown(answer),
